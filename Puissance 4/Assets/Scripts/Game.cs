@@ -2,12 +2,13 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Game : MonoBehaviour
 {
     int[,] grille = new int[7,6];
     private bool canPlay = true;
-    private bool whosTurn = true;
+    private bool whosTurn;
     [SerializeField] private GameObject redCoin;
     [SerializeField] private GameObject yellowCoin;
     [SerializeField] private Transform column0;
@@ -39,7 +40,6 @@ public class Game : MonoBehaviour
                 if (grille[column,i] == 0)
                 {
                     SpawnCoin(column);
-                    CheckWin(column, i);
                     if (whosTurn)
                     {
                         grille[column,i] = 1;
@@ -53,6 +53,9 @@ public class Game : MonoBehaviour
                         yellowTurn.SetActive(true);
                     }
                     canPlay = false;
+                    // faudras faire des trucs ici avec ça en mode if check win ou if equality tu captes bg
+                    CheckWin(column, i);
+                    Equality();
                     StartCoroutine(WaitForPlay());
                     whosTurn = !whosTurn;
                     return;
@@ -63,7 +66,7 @@ public class Game : MonoBehaviour
 
     IEnumerator WaitForPlay()
     {
-        yield return new WaitForSeconds(0.8f);
+        yield return new WaitForSeconds(0.5f);
         canPlay = true;
     }
     void SpawnCoin(int column)
@@ -83,44 +86,112 @@ public class Game : MonoBehaviour
 
     bool CheckWin(int column, int row)
     {
-        // victoire colonne
+        // Victoire colonne
         int cpt = 1;
         for (int i = 1; i < 6; i++)
         {
-            if (grille[column, i] == grille[column, i-1] && grille[column, i] != 0)
+            if (grille[column, i] == grille[column, i - 1] && grille[column, i] != 0)
             {
                 cpt++;
             }
-            else if (grille[column, i] != grille[column, i-1])
+            else
             {
                 cpt = 1;
             }
-            if (cpt >= 3)
+
+            if (cpt >= 4)
             {
-                Debug.Log("il y a une victoire");
+                Debug.Log("Il y a une victoire en colonne");
                 return true;
             }
         }
-        // victoire ligne
+
+        // Victoire ligne
         cpt = 1;
         for (int i = 1; i < 7; i++)
         {
-            if (grille[i, row] == grille[i-1, row] && grille[i, row] != 0)
+            if (grille[i, row] == grille[i - 1, row] && grille[i, row] != 0)
             {
                 cpt++;
             }
-            else if (grille[i, row] == grille[i-1, row])
+            else
             {
                 cpt = 1;
             }
-            if (cpt >= 3)
+
+            if (cpt >= 4)
             {
-                Debug.Log("il y a une victoire");
+                Debug.Log("Il y a une victoire en ligne");
                 return true;
             }
         }
-        // victoire diagonale
-        // check en mode le point et on verif ses 4 diagonales en -4 4, -4 -4 , 4 4 et 4 -4
+
+        // Victoire diagonale
+        if (CheckDiagonalWin(column, row))
+        {
+            Debug.Log("Il y a une victoire en diagonale");
+            return true;
+        }
+
         return false;
+    }
+    
+    bool CheckDiagonalWin(int column, int row)
+    {
+        int player = grille[column, row];
+        if (player == 0) return false; 
+        int count = 1;
+        int i = column - 1, j = row - 1;
+        while (i >= 0 && j >= 0 && grille[i, j] == player)
+        {
+            count++;
+            i--;
+            j--;
+        }
+        i = column + 1;
+        j = row + 1;
+        while (i < 7 && j < 6 && grille[i, j] == player)
+        {
+            count++;
+            i++;
+            j++;
+        }
+        if (count >= 4) return true;
+        count = 1;
+        i = column - 1;
+        j = row + 1;
+        while (i >= 0 && j < 6 && grille[i, j] == player)
+        {
+            count++;
+            i--;
+            j++;
+        }
+        i = column + 1;
+        j = row - 1;
+        while (i < 7 && j >= 0 && grille[i, j] == player)
+        {
+            count++;
+            i++;
+            j--;
+        }
+        return count >= 4;
+    }
+
+    bool Equality()
+    {
+        for (int i = 0; i < 7; i++)
+        {
+            if (grille[i,5] == 0)
+            {
+                return false;
+            }
+        }
+        Debug.Log("egalité");
+        return true;
+    }
+
+    public void Restart()
+    {
+        SceneManager.LoadScene(0);
     }
 }
