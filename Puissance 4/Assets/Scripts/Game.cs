@@ -6,9 +6,19 @@ using UnityEngine.SceneManagement;
 
 public class Game : MonoBehaviour
 {
-    int[,] grille = new int[7,6];
+    #region Variables
+    
+    public int[,] grille = new int[7,6];
     private bool canPlay = true;
-    private bool whosTurn;
+    [SerializeField] private bool haveRandomIa;
+    [SerializeField] private RandomIa randomIaReference;
+    [SerializeField] private bool haveIa;
+    [SerializeField] private Ia IaReference;
+    public bool whosTurn;
+    private Stack<int[,]> playedTurns = new Stack<int[,]>();
+    private Stack<GameObject> playedTurnsGo = new Stack<GameObject>();
+    private Stack<int[,]> turnsRedo = new Stack<int[,]>();
+    private Stack<GameObject> turnsRedoGo = new Stack<GameObject>();
     [SerializeField] private GameObject redCoin;
     [SerializeField] private GameObject yellowCoin;
     [SerializeField] private Transform column0;
@@ -20,6 +30,8 @@ public class Game : MonoBehaviour
     [SerializeField] private Transform column6;
     [SerializeField] private GameObject redTurn;
     [SerializeField] private GameObject yellowTurn;
+    
+    #endregion
     private void Start()
     {
         for (int i = 0; i < 7; i++)
@@ -30,38 +42,52 @@ public class Game : MonoBehaviour
             }
         }
     }
-
+    #region Game
     public void AddCoin(int column)
     {
+        bool fullColumn = true;
         if (canPlay)
         {
             for (int i = 0; i < 6; i++)
             {
                 if (grille[column,i] == 0)
                 {
+                    fullColumn = false;
+                    DontRedo();
+                    playedTurns.Push(CloneGrid(grille));
                     SpawnCoin(column);
                     if (whosTurn)
                     {
                         grille[column,i] = 1;
-                        redTurn.SetActive(true);
-                        yellowTurn.SetActive(false);
                     }
                     else
                     {
                         grille[column,i] = 2;
-                        redTurn.SetActive(false);
-                        yellowTurn.SetActive(true);
                     }
+                    RefreshUi();
                     canPlay = false;
-                    // faudras faire des trucs ici avec ça en mode if check win ou if equality tu captes bg
-                    CheckWin(column, i);
+                    CheckWin(column, i, grille);
                     Equality();
                     StartCoroutine(WaitForPlay());
                     whosTurn = !whosTurn;
+                    if (haveRandomIa && whosTurn)
+                    {
+                        randomIaReference.IaTurn();
+                    }
+                    if (haveIa && whosTurn)
+                    {
+                        IaReference.IaTurn();
+                    }
                     return;
                 }
             }
+
+            if (fullColumn && haveRandomIa && whosTurn)
+            {
+                randomIaReference.IaTurn();
+            }
         }
+        
     }
 
     IEnumerator WaitForPlay()
@@ -71,26 +97,31 @@ public class Game : MonoBehaviour
     }
     void SpawnCoin(int column)
     {
+        GameObject newGo;
         Transform[] columns = { column0, column1, column2, column3, column4, column5, column6 };
 
         if (column >= 0 && column < columns.Length && whosTurn)
         {
-            Instantiate(yellowCoin, columns[column].position, Quaternion.identity);
+            newGo = Instantiate(yellowCoin, columns[column].position, Quaternion.identity);
+            playedTurnsGo.Push(newGo);
         }
         else if (column >= 0 && column < columns.Length && whosTurn == false)
         {
-            Instantiate(redCoin, columns[column].position, Quaternion.identity);
+            newGo = Instantiate(redCoin, columns[column].position, Quaternion.identity);
+            playedTurnsGo.Push(newGo);
         }
-        
     }
 
-    bool CheckWin(int column, int row)
+    #endregion
+    
+    #region Win
+    public bool CheckWin(int column, int row, int[,] grid)
     {
         // Victoire colonne
         int cpt = 1;
         for (int i = 1; i < 6; i++)
         {
-            if (grille[column, i] == grille[column, i - 1] && grille[column, i] != 0)
+            if (grid[column, i] == grid[column, i - 1] && grid[column, i] != 0)
             {
                 cpt++;
             }
@@ -110,7 +141,7 @@ public class Game : MonoBehaviour
         cpt = 1;
         for (int i = 1; i < 7; i++)
         {
-            if (grille[i, row] == grille[i - 1, row] && grille[i, row] != 0)
+            if (grid[i, row] == grid[i - 1, row] && grid[i, row] != 0)
             {
                 cpt++;
             }
@@ -176,6 +207,8 @@ public class Game : MonoBehaviour
         }
         return count >= 4;
     }
+    
+    
 
     bool Equality()
     {
@@ -186,12 +219,86 @@ public class Game : MonoBehaviour
                 return false;
             }
         }
-        Debug.Log("egalité");
+        Debug.Log("Il y a une égalité");
         return true;
     }
-
+    #endregion
+    
+    #region Undo/Redo/Restart
     public void Restart()
     {
         SceneManager.LoadScene(0);
     }
+    public void Undo()
+    {
+        if (playedTurns.Count > 0)
+        {
+            turnsRedo.Push(CloneGrid(grille));  
+            turnsRedoGo.Push(playedTurnsGo.Peek());
+            grille = playedTurns.Pop();
+            playedTurnsGo.Pop().SetActive(false);
+            RefreshUi();
+            whosTurn = !whosTurn;
+        }
+    }
+
+    public void Redo()
+    {
+        if (turnsRedo.Count > 0)
+        {
+            playedTurns.Push(CloneGrid(grille));  
+            playedTurnsGo.Push(turnsRedoGo.Peek());
+            grille = turnsRedo.Pop();
+            turnsRedoGo.Pop().SetActive(true);
+            RefreshUi();
+            whosTurn = !whosTurn;
+        }
+    }
+
+    void DontRedo()
+    {
+        for (int i = 0; i < turnsRedoGo.Count; i++)
+        {
+            Destroy(turnsRedoGo.Pop());
+        }
+
+        turnsRedo = new Stack<int[,]>();
+    }
+    #endregion
+
+    #region  Utils Functions
+    private int[,] CloneGrid(int[,] source)
+    {
+        int rows = source.GetLength(0);
+        int cols = source.GetLength(1);
+        int[,] copy = new int[rows, cols];
+
+        for (int i = 0; i < rows; i++)
+        {
+            for (int j = 0; j < cols; j++)
+            {
+                copy[i, j] = source[i, j];
+            }
+        }
+        return copy;
+    }
+    void RefreshUi()
+    {
+        if (whosTurn)
+        {
+            redTurn.SetActive(true);
+            yellowTurn.SetActive(false);
+        }
+        else
+        {
+            redTurn.SetActive(false);
+            yellowTurn.SetActive(true);
+        }
+    }
+
+    public int[,] TakeGrid()
+    {
+        return grille;
+    }
+    #endregion
 }
